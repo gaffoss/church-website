@@ -38,19 +38,20 @@ pending: dict[int, str] = {}
 
 MAIN_MENU = InlineKeyboardMarkup([
     [
-        InlineKeyboardButton("📰 Додати новину",    callback_data="btn_news"),
-        InlineKeyboardButton("📢 Оголошення",        callback_data="btn_announce"),
+        InlineKeyboardButton("📰 Додати новину",      callback_data="btn_news"),
+        InlineKeyboardButton("📢 Оголошення",          callback_data="btn_announce"),
+        InlineKeyboardButton("🗑 Видалити оголошення", callback_data="btn_clear_announce"),
     ],
     [
-        InlineKeyboardButton("📅 Розклад",           callback_data="btn_schedule"),
-        InlineKeyboardButton("🖼 Галерея",            callback_data="btn_gallery"),
+        InlineKeyboardButton("📅 Розклад",             callback_data="btn_schedule"),
+        InlineKeyboardButton("🖼 Галерея",              callback_data="btn_gallery"),
     ],
     [
-        InlineKeyboardButton("🚀 Опублікувати сайт", callback_data="btn_deploy"),
-        InlineKeyboardButton("📊 Статус",            callback_data="btn_status"),
+        InlineKeyboardButton("🚀 Опублікувати сайт",   callback_data="btn_deploy"),
+        InlineKeyboardButton("📊 Статус",              callback_data="btn_status"),
     ],
     [
-        InlineKeyboardButton("❓ Допомога",           callback_data="btn_help"),
+        InlineKeyboardButton("❓ Допомога",             callback_data="btn_help"),
     ],
 ])
 
@@ -204,6 +205,20 @@ async def _do_announce(text: str, reply) -> None:
     await reply(f"📢 *Оголошення опубліковано!*\n_{text}_\n\n{out}", parse_mode="Markdown")
 
 
+async def _do_clear_announce(reply) -> None:
+    html = read(INDEX)
+    if "<!-- ANNOUNCE START -->" not in html:
+        await reply("ℹ️ Активного оголошення немає.")
+        return
+    html = re.sub(
+        r"\n?<!-- ANNOUNCE START -->.*?<!-- ANNOUNCE END -->",
+        "", html, flags=re.DOTALL
+    )
+    write(INDEX, html)
+    ok, out = git_push("announce: видалено оголошення")
+    await reply(f"🗑 *Оголошення видалено!*\n\n{out}", parse_mode="Markdown")
+
+
 async def _do_schedule(text: str, reply) -> None:
     if "|" not in text:
         await reply(
@@ -297,11 +312,16 @@ async def cmd_deploy(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     )
 
 @owner_only
+async def cmd_clear_announce(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    await _do_clear_announce(update.message.reply_text)
+
+@owner_only
 async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "📖 *Доступні команди:*\n\n"
         "/news Заголовок \\| Текст — додати новину\n"
         "/announce Текст — банер на головній\n"
+        "/clear\\_announce — видалити оголошення\n"
         "/schedule Нд 12:00 \\| Ср 19:00 \\| Пт 14:00\n"
         "/deploy — опублікувати сайт\n"
         "/status — статус репозиторію\n"
@@ -331,6 +351,9 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         action = data.replace("btn_", "")
         pending[chat_id] = action
         await q.message.reply_text(PROMPTS[data], parse_mode="Markdown")
+
+    elif data == "btn_clear_announce":
+        await _do_clear_announce(q.message.reply_text)
 
     elif data == "btn_deploy":
         await q.message.reply_text("⏳ Деплой на GitHub Pages...")
@@ -413,8 +436,9 @@ async def post_init(app: Application) -> None:
         BotCommand("start",    "Головне меню"),
         BotCommand("menu",     "Головне меню"),
         BotCommand("news",     "Додати новину"),
-        BotCommand("announce", "Оголошення на сайті"),
-        BotCommand("schedule", "Оновити розклад"),
+        BotCommand("announce",       "Оголошення на сайті"),
+        BotCommand("clear_announce", "Видалити оголошення"),
+        BotCommand("schedule",       "Оновити розклад"),
         BotCommand("deploy",   "Опублікувати сайт"),
         BotCommand("status",   "Статус сайту"),
         BotCommand("help",     "Допомога"),
@@ -435,8 +459,9 @@ def main():
     app.add_handler(CommandHandler("start",    cmd_start))
     app.add_handler(CommandHandler("menu",     cmd_menu))
     app.add_handler(CommandHandler("news",     cmd_news))
-    app.add_handler(CommandHandler("announce", cmd_announce))
-    app.add_handler(CommandHandler("schedule", cmd_schedule))
+    app.add_handler(CommandHandler("announce",       cmd_announce))
+    app.add_handler(CommandHandler("clear_announce", cmd_clear_announce))
+    app.add_handler(CommandHandler("schedule",       cmd_schedule))
     app.add_handler(CommandHandler("status",   cmd_status))
     app.add_handler(CommandHandler("deploy",   cmd_deploy))
     app.add_handler(CommandHandler("help",     cmd_help))
