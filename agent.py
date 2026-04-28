@@ -124,7 +124,6 @@ async def _do_news(text: str, reply) -> None:
     ts = datetime.now().strftime("%Y%m%d%H%M%S")
 
     card = f"""
-      <!-- AGENT:{ts} -->
       <article class="news-card" data-cat="community">
         <div class="news-card-top">
           <div class="news-meta">
