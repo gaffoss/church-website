@@ -30,8 +30,8 @@ NEWS_HTML = os.path.join(SITE_DIR, "news.html")
 MONTHS_UK = ["січ","лют","бер","квіт","трав","черв",
              "лип","серп","вер","жовт","лист","груд"]
 
-# Очікує введення: {chat_id: 'news' | 'announce' | 'schedule'}
-pending: dict[int, str] = {}
+# Очікує введення або підтвердження: {chat_id: str | dict}
+pending: dict = {}
 
 
 # ── Клавіатура ─────────────────────────────────────────────────
@@ -352,6 +352,27 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         pending[chat_id] = action
         await q.message.reply_text(PROMPTS[data], parse_mode="Markdown")
 
+    elif data == "approve":
+        stored = pending.pop(chat_id, None)
+        if isinstance(stored, dict) and stored.get("approve") == "news":
+            news_text = stored["text"]
+        else:
+            # n8n flow: текст новини міститься в самому повідомленні
+            news_text = (q.message.text or q.message.caption or "").strip()
+        if news_text:
+            await _do_news(news_text, q.message.reply_text)
+            await q.message.reply_text("Що далі?", reply_markup=MAIN_MENU)
+        else:
+            await q.message.reply_text("❌ Немає новини для публікації.", reply_markup=MAIN_MENU)
+
+    elif data == "reject":
+        pending.pop(chat_id, None)
+        await q.message.reply_text("🚫 Новину відхилено.", reply_markup=MAIN_MENU)
+
+    elif data == "btn_cancel":
+        pending.pop(chat_id, None)
+        await q.message.reply_text("↩️ Скасовано.", reply_markup=MAIN_MENU)
+
     elif data == "btn_clear_announce":
         await _do_clear_announce(q.message.reply_text)
 
@@ -419,7 +440,17 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     reply = update.message.reply_text
 
     if action == "news":
-        await _do_news(text, reply)
+        pending[chat_id] = {"approve": "news", "text": text}
+        preview = text[:200] + ("…" if len(text) > 200 else "")
+        await reply(
+            f"📰 *Перегляд новини:*\n\n{preview}\n\nОпублікувати?",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("✅ Опублікувати в Telegram", callback_data="approve"),
+                InlineKeyboardButton("❌ Скасувати", callback_data="btn_cancel"),
+            ]]),
+        )
+        return
     elif action == "announce":
         await _do_announce(text, reply)
     elif action == "schedule":
