@@ -130,8 +130,16 @@ async def _do_news(text: str, reply) -> None:
             <span class="news-date" data-uk="{duk}" data-en="{den}">{duk}</span>
             <span class="news-cat" data-uk="Громада" data-en="Community">Громада</span>
           </div>
-          <div class="news-title" data-uk="{title}" data-en="{title}">{title}</div>
-          <p class="news-text" data-uk="{body}" data-en="{body}">{body}</p>
+          <div class="news-title"
+            data-uk="{title}"
+            data-en="{title}">
+            {title}
+          </div>
+          <p class="news-text"
+            data-uk="{body}"
+            data-en="{body}">
+            {body}
+          </p>
         </div>
         <div class="news-card-bottom">
           <a href="#" class="news-read-btn">
