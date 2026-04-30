@@ -44,7 +44,7 @@ REPLY_MENU = ReplyKeyboardMarkup(
         [KeyboardButton("📊 Статус"),         KeyboardButton("❓ Допомога")],
     ],
     resize_keyboard=True,
-    persistent=True,
+    is_persistent=True,
 )
 
 REPLY_BUTTON_MAP = {
@@ -573,7 +573,10 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
 
     print("🤖 Агент запущено. Очікуємо команди...")
-    app.run_polling(drop_pending_updates=True)
+    app.run_polling(
+        drop_pending_updates=True,
+        allowed_updates=["message", "callback_query"],
+    )
 
 
 if __name__ == "__main__":
