@@ -10,7 +10,7 @@ import functools
 from datetime import datetime
 
 from dotenv import load_dotenv
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, BotCommand
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, BotCommand, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler,
     MessageHandler, filters, ContextTypes,
@@ -35,6 +35,28 @@ pending: dict = {}
 
 
 # ── Клавіатура ─────────────────────────────────────────────────
+
+REPLY_MENU = ReplyKeyboardMarkup(
+    [
+        [KeyboardButton("📰 Додати новину"), KeyboardButton("📢 Оголошення")],
+        [KeyboardButton("🗑️ Видалити"),      KeyboardButton("📅 Розклад")],
+        [KeyboardButton("🖼️ Галерея"),        KeyboardButton("🚀 Опублікувати сайт")],
+        [KeyboardButton("📊 Статус"),         KeyboardButton("❓ Допомога")],
+    ],
+    resize_keyboard=True,
+    persistent=True,
+)
+
+REPLY_BUTTON_MAP = {
+    "📰 Додати новину":    "btn_news",
+    "📢 Оголошення":       "btn_announce",
+    "🗑️ Видалити":         "btn_clear_announce",
+    "📅 Розклад":          "btn_schedule",
+    "🖼️ Галерея":          "btn_gallery",
+    "🚀 Опублікувати сайт": "btn_deploy",
+    "📊 Статус":           "btn_status",
+    "❓ Допомога":         "btn_help",
+}
 
 MAIN_MENU = InlineKeyboardMarkup([
     [
@@ -262,7 +284,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         "👋 *Привіт! Я бот керування сайтом церкви.*\n\n"
         "Оберіть дію з меню нижче або введіть команду вручну:",
         parse_mode="Markdown",
-        reply_markup=MAIN_MENU,
+        reply_markup=REPLY_MENU,
     )
 
 @owner_only
@@ -427,6 +449,57 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 @owner_only
 async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
+    text_in = update.message.text.strip()
+
+    # Обробка кнопок Reply Keyboard
+    btn = REPLY_BUTTON_MAP.get(text_in)
+    if btn:
+        pending.pop(chat_id, None)
+        if btn in PROMPTS:
+            action = btn.replace("btn_", "")
+            pending[chat_id] = action
+            await update.message.reply_text(PROMPTS[btn], parse_mode="Markdown")
+        elif btn == "btn_clear_announce":
+            await _do_clear_announce(update.message.reply_text)
+        elif btn == "btn_deploy":
+            await update.message.reply_text("⏳ Деплой на GitHub Pages...")
+            ok, out = git_push("deploy: manual trigger via Telegram")
+            await update.message.reply_text(f"{'✅' if ok else '❌'} {out}")
+        elif btn == "btn_status":
+            _, log   = _git("log", "--oneline", "-5")
+            _, dirty = _git("status", "--short")
+            pages_url = f"https://gaffoss.github.io/church-website/"
+            await update.message.reply_text(
+                f"🌐 *Статус сайту*\n\n"
+                f"📁 Репо: github.com/{GITHUB_REPO}\n"
+                f"🔗 Сайт: {pages_url}\n\n"
+                f"📝 *Останні коміти:*\n```\n{log or '—'}\n```\n\n"
+                f"📋 *Незбережені зміни:*\n```\n{dirty or 'немає'}\n```",
+                parse_mode="Markdown",
+            )
+        elif btn == "btn_gallery":
+            await update.message.reply_text(
+                "🖼 *Галерея*\n\n"
+                "Фото галереї знаходяться у папці:\n"
+                "`/Users/ludmila/church-website/`\n\n"
+                "Файли: `worship1-3.jpg`, `prayer1-6.jpg`,\n"
+                "`event1-10.jpg`, `kids1-6.jpg`\n\n"
+                "Щоб додати нові фото — скопіюйте їх у папку і натисніть 🚀 Опублікувати сайт",
+                parse_mode="Markdown",
+            )
+        elif btn == "btn_help":
+            await update.message.reply_text(
+                "📖 *Доступні команди:*\n\n"
+                "/news Заголовок | Текст\n"
+                "/announce Текст оголошення\n"
+                "/schedule Нд 12:00 | Ср 19:00 | Пт 14:00\n"
+                "/deploy — опублікувати\n"
+                "/status — статус\n"
+                "/menu — головне меню",
+                parse_mode="Markdown",
+            )
+        return
+
     action = pending.pop(chat_id, None)
 
     if action is None:
@@ -436,7 +509,7 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    text = update.message.text.strip()
+    text = text_in
     reply = update.message.reply_text
 
     if action == "news":
